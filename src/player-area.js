@@ -40,6 +40,7 @@ export const PlayerArea = () => {
   const mapImageRef = useRef(null);
 
   const [markedAreas, setMarkedAreas] = useState(() => []);
+  const [tokens, setTokens] = useState(() => []);
 
   const centerMap = (isAnimated = true) => {
     if (!panZoomRef.current) {
@@ -82,6 +83,23 @@ export const PlayerArea = () => {
           y: data.y * mapCanvasDimensions.current.ratio
         }
       ]);
+    });
+
+    socket.on("add token", async data => {
+      setTokens(tokens => tokens.filter(area => area.id !== data.id));
+      setTokens(tokens => [
+        ...tokens,
+        {
+          id: data.id,
+          x: data.x * mapCanvasDimensions.current.ratio,
+          y: data.y * mapCanvasDimensions.current.ratio,
+          radius: data.radius * mapCanvasDimensions.current.ratio
+        }
+      ]);
+    });
+
+    socket.on("remove token", async data => {
+      setTokens(tokens => tokens.filter(area => area.id !== data.id));
     });
 
     socket.on("map update", async data => {
@@ -301,6 +319,7 @@ export const PlayerArea = () => {
           <ObjectLayer
             ref={objectSvgRef}
             areaMarkers={markedAreas}
+            tokens={tokens}
             removeAreaMarker={id => {
               setMarkedAreas(markedAreas =>
                 markedAreas.filter(area => area.id !== id)

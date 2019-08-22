@@ -74,9 +74,7 @@ app.get("/map/:id/map", (req, res) => {
     return res.status(404).json({
       data: null,
       error: {
-        message: `Map with id '${
-          req.params.id
-        }' does not have a map image yet.`,
+        message: `Map with id '${req.params.id}' does not have a map image yet.`,
         code: "ERR_MAP_NO_IMAGE"
       }
     });
@@ -101,9 +99,7 @@ app.get("/map/:id/fog", (req, res) => {
     return res.status(404).json({
       data: null,
       error: {
-        message: `Map with id '${
-          req.params.id
-        }' does not have a fog image yet.`,
+        message: `Map with id '${req.params.id}' does not have a fog image yet.`,
         code: "ERR_MAP_NO_FOG"
       }
     });
@@ -125,9 +121,7 @@ app.get("/map/:id/fog-live", (req, res) => {
     return res.status(404).json({
       data: null,
       error: {
-        message: `Map with id '${
-          req.params.id
-        }' does not have a fog image yet.`,
+        message: `Map with id '${req.params.id}' does not have a fog image yet.`,
         code: "ERR_MAP_NO_FOG"
       }
     });
@@ -358,6 +352,18 @@ io.on("connection", function(socket) {
   socket.on("mark area", msg => {
     io.emit("mark area", {
       id: createUniqueId(),
+      ...msg
+    });
+  });
+
+  socket.on("add token", msg => {
+    io.emit("add token", {
+      ...msg
+    });
+  });
+
+  socket.on("remove token", msg => {
+    io.emit("remove token", {
       ...msg
     });
   });

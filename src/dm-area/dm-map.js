@@ -182,6 +182,8 @@ const useModeState = createPersistedState("dm.settings.mode");
 const useBrushShapeState = createPersistedState("dm.settings.brushShape");
 const useToolState = createPersistedState("dm.settings.tool");
 const useLineWidthState = createPersistedState("dm.settings.lineWidth");
+const useTokenIdState = createPersistedState("dm.settings.currentTokenId");
+const useTokenSizeState = createPersistedState("dm.settings.currentTokenSize");
 
 /**
  * loadedMapId = id of the map that is currently visible in the editor
@@ -213,12 +215,15 @@ export const DmMap = ({
   const [brushShape, setBrushShape] = useBrushShapeState("square");
   const [tool, setTool] = useToolState("brush"); // "brush" or "area"
   const [lineWidth, setLineWidth] = useLineWidthState(15);
+  const [tokenId, setTokenId] = useTokenIdState(1);
+  const [tokenSize, setTokenSize] = useTokenSizeState(15);
 
-  // marker related stuff
+  // object layer related stuff
   const socketRef = useRef(null);
   const mapCanvasDimensions = useRef(null);
   const objectSvgRef = useRef(null);
   const [markedAreas, setMarkedAreas] = useState(() => []);
+  const [tokens, setTokens] = useState(() => []);
 
   const fillFog = useCallback(() => {
     if (!fogCanvasRef.current) {
@@ -263,9 +268,14 @@ export const DmMap = ({
         throw new Error("brush shape not found");
       }
 
+      if (tool === "tokens") {
+        maskDimensions.r = tokenSize;
+        maskDimensions.startingAngle = 0;
+        maskDimensions.endingAngle = Math.PI * 2;
+      }
       return maskDimensions;
     },
-    [brushShape, lineWidth]
+    [brushShape, lineWidth, tokenSize, tool]
   );
 
   const clearFog = useCallback(() => {
@@ -540,6 +550,19 @@ export const DmMap = ({
     const socket = io();
     socketRef.current = socket;
 
+    socket.on("add token", async data => {
+      setTokens(tokens => tokens.filter(area => area.id !== data.id));
+      setTokens(tokens => [
+        ...tokens,
+        {
+          id: data.id,
+          x: data.x * mapCanvasDimensions.current.ratio,
+          y: data.y * mapCanvasDimensions.current.ratio,
+          radius: data.radius * mapCanvasDimensions.current.ratio
+        }
+      ]);
+    });
+
     socket.on("mark area", async data => {
       setMarkedAreas(markedAreas => [
         ...markedAreas,
@@ -549,6 +572,10 @@ export const DmMap = ({
           y: data.y * mapCanvasDimensions.current.ratio
         }
       ]);
+    });
+
+    socket.on("remove token", async data => {
+      setTokens(tokens => tokens.filter(area => area.id !== data.id));
     });
 
     return () => {
@@ -674,13 +701,30 @@ export const DmMap = ({
           cursor
         }}
         onClick={ev => {
-          if (tool !== "mark") {
-            return;
-          }
           const ref = new Referentiel(panZoomRef.current.dragContainer.current);
           const [x, y] = ref.global_to_local([ev.pageX, ev.pageY]);
           const { ratio } = mapCanvasDimensions.current;
-          socketRef.current.emit("mark area", { x: x / ratio, y: y / ratio });
+          switch (tool) {
+            case "tokens": {
+              socketRef.current.emit("add token", {
+                x: x / ratio,
+                y: y / ratio,
+                id: tokenId,
+                radius: tokenSize
+              });
+              break;
+            }
+            case "mark": {
+              socketRef.current.emit("mark area", {
+                x: x / ratio,
+                y: y / ratio
+              });
+              break;
+            }
+            default: {
+              return;
+            }
+          }
         }}
         onStateChange={() => {
           panZoomReferentialRef.current = new Referentiel(
@@ -707,6 +751,7 @@ export const DmMap = ({
           <ObjectLayer
             ref={objectSvgRef}
             areaMarkers={markedAreas}
+            tokens={tokens}
             removeAreaMarker={id => {
               setMarkedAreas(markedAreas =>
                 markedAreas.filter(area => area.id !== id)
@@ -1041,6 +1086,52 @@ export const DmMap = ({
                 <Icons.CrosshairIcon />
                 <Icons.Label>Mark</Icons.Label>
               </Toolbar.Button>
+            </Toolbar.Item>
+            <Toolbar.Item isActive={tool === "tokens"}>
+              <Toolbar.Button
+                onClick={() => {
+                  setTool("tokens");
+                }}
+              >
+                <Icons.EditIcon />
+                <Icons.Label>Add Token</Icons.Label>
+              </Toolbar.Button>
+              {tool === "tokens" ? (
+                <Toolbar.Popup>
+                  <h6>Token Number</h6>
+                  <div style={{ display: "flex" }}>
+                    <input
+                      type="number"
+                      min="1"
+                      max="28"
+                      step="1"
+                      value={tokenId}
+                      onChange={ev => {
+                        setTokenId(Math.min(28, Math.max(0, ev.target.value)));
+                      }}
+                    />
+                  </div>
+                  <h6>Token Size</h6>
+                  <input
+                    type="range"
+                    min="1"
+                    max="200"
+                    step="1"
+                    value={tokenSize}
+                    onChange={ev => {
+                      setTokenSize(Math.min(200, Math.max(0, ev.target.value)));
+                    }}
+                  />
+
+                  <button
+                    onClick={ev => {
+                      socketRef.current.emit("remove token", { id: tokenId });
+                    }}
+                  >
+                    Remove Token
+                  </button>
+                </Toolbar.Popup>
+              ) : null}
             </Toolbar.Item>
           </Toolbar.Group>
           <Toolbar.Group>
